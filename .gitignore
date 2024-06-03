@@ -76,3 +76,17 @@ WexLogFileOutput/*
 #==============================================================================#
 bindings/go/llvm/llvm_config.go
 bindings/go/llvm/workdir
+
+# RTC ignores
+
+# Premake generated files #
+###########################
+*.vcxproj*
+*.sln
+*.make
+Makefile
+*.xcworkspace
+*.xcodeproj
+compile_commands.json
+*_single_file_build.cpp
+*_unity_build.cpp
