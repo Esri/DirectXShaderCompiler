@@ -3,8 +3,8 @@ from conans import ConanFile
 class DirectXShaderCompilerConan(ConanFile):
     name = "DirectXShaderCompiler"
     version = "0.0.1"
-    url = "https://github.com/duncanthomson/DirectXShaderCompiler"
-    license = "https://github.com/duncanthomson/DirectXShaderCompiler/blob/main/LICENSE.TXT"
+    url = "https://github.com/Esri/DirectXShaderCompiler/blob/runtimecore"
+    license = "https://github.com/Esri/DirectXShaderCompiler/blob/runtimecore/LICENSE.TXT"
     description = "A compiler and related tools used to compile High-Level Shader Language (HLSL) programs into DirectX Intermediate Language (DXIL) representation"
 
     # RTC specific triple
