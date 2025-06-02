@@ -328,6 +328,29 @@ const HybridPointerType *SpirvContext::getPointerType(QualType pointee,
   return result;
 }
 
+const ForwardPointerType *
+SpirvContext::getForwardPointerType(QualType pointee) {
+  assert(hlsl::IsVKBufferPointerType(pointee));
+
+  auto foundPointee = forwardPointerTypes.find(pointee);
+  if (foundPointee != forwardPointerTypes.end()) {
+    return foundPointee->second;
+  }
+
+  return forwardPointerTypes[pointee] = new (this) ForwardPointerType(pointee);
+}
+
+const SpirvPointerType *SpirvContext::getForwardReference(QualType type) {
+  return forwardReferences[type];
+}
+
+void SpirvContext::registerForwardReference(
+    QualType type, const SpirvPointerType *pointerType) {
+  assert(pointerType->getStorageClass() ==
+         spv::StorageClass::PhysicalStorageBuffer);
+  forwardReferences[type] = pointerType;
+}
+
 FunctionType *
 SpirvContext::getFunctionType(const SpirvType *ret,
                               llvm::ArrayRef<const SpirvType *> param) {
@@ -447,6 +470,21 @@ SpirvContext::getDebugTypeVector(const SpirvType *spirvType,
   auto *eTy = dyn_cast<SpirvDebugType>(elemType);
   assert(eTy && "Element type must be a SpirvDebugType.");
   auto *debugType = new (this) SpirvDebugTypeVector(eTy, elemCount);
+  debugTypes[spirvType] = debugType;
+  return debugType;
+}
+
+SpirvDebugType *
+SpirvContext::getDebugTypeMatrix(const SpirvType *spirvType,
+                                 SpirvDebugInstruction *vectorType,
+                                 uint32_t vectorCount) {
+  // Reuse existing debug type if possible.
+  if (debugTypes.find(spirvType) != debugTypes.end())
+    return debugTypes[spirvType];
+
+  auto *eTy = dyn_cast<SpirvDebugTypeVector>(vectorType);
+  assert(eTy && "Element type must be a SpirvDebugTypeVector.");
+  auto *debugType = new (this) SpirvDebugTypeMatrix(eTy, vectorCount);
   debugTypes[spirvType] = debugType;
   return debugType;
 }

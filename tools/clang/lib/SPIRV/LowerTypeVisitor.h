@@ -124,12 +124,20 @@ private:
                                    SpirvLayoutRule rule,
                                    const uint32_t fieldIndex);
 
+  /// Get a lowered SpirvPointer from the args to a SpirvOpaqueType.
+  /// The pointer will use the given layout rule. `isRowMajor` is used to
+  /// lower the pointee type.
+  const SpirvType *getSpirvPointerFromInlineSpirvType(
+      ArrayRef<TemplateArgument> args, SpirvLayoutRule rule,
+      Optional<bool> isRowMajor, SourceLocation location);
+
 private:
   ASTContext &astContext;                /// AST context
   SpirvContext &spvContext;              /// SPIR-V context
   AlignmentSizeCalculator alignmentCalc; /// alignment calculator
   bool useArrayForMat1xN;                /// SPIR-V array for HLSL Matrix 1xN
   SpirvBuilder &spvBuilder;
+  SmallVector<QualType, 4> visitedTypeStack; // for type recursion detection
 };
 
 } // end namespace spirv

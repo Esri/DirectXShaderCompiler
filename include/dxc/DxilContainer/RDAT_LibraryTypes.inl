@@ -22,6 +22,7 @@ RDAT_ENUM_START(DxilResourceFlag, uint32_t)
   RDAT_ENUM_VALUE(UAVRasterizerOrderedView, 1 << 2)
   RDAT_ENUM_VALUE(DynamicIndexing,          1 << 3)
   RDAT_ENUM_VALUE(Atomics64Use,             1 << 4)
+  RDAT_ENUM_VALUE(UAVReorderCoherent,       1 << 5)
 RDAT_ENUM_END()
 
 RDAT_ENUM_START(DxilShaderStageFlags, uint32_t)
@@ -72,7 +73,7 @@ RDAT_ENUM_START(DxilFeatureInfo1, uint32_t)
   RDAT_ENUM_VALUE(DerivativesInMeshAndAmpShaders, 0x1000000)
   RDAT_ENUM_VALUE(ResourceDescriptorHeapIndexing, 0x2000000)
   RDAT_ENUM_VALUE(SamplerDescriptorHeapIndexing, 0x4000000)
-  RDAT_ENUM_VALUE(WaveMMA, 0x8000000)
+  RDAT_ENUM_VALUE(Reserved, 0x8000000)
   RDAT_ENUM_VALUE(AtomicInt64OnHeapResource, 0x10000000)
   RDAT_ENUM_VALUE(AdvancedTextureOps, 0x20000000)
   RDAT_ENUM_VALUE(WriteableMSAATextures, 0x40000000)
@@ -265,6 +266,8 @@ RDAT_ENUM_START(NodeFuncAttribKind, uint32_t)
   RDAT_ENUM_VALUE(MaxRecursionDepth, 5)
   RDAT_ENUM_VALUE(LocalRootArgumentsTableIndex, 6)
   RDAT_ENUM_VALUE(MaxDispatchGrid, 7)
+  RDAT_ENUM_VALUE(Reserved_MeshNodePreview1, 8)
+  RDAT_ENUM_VALUE(Reserved_MeshNodePreview2, 9)
   RDAT_ENUM_VALUE_NODEF(LastValue)
 RDAT_ENUM_END()
 
@@ -307,9 +310,10 @@ RDAT_DXIL_ENUM_START(hlsl::DXIL::NodeLaunchType, uint32_t)
   RDAT_ENUM_VALUE_NODEF(Broadcasting)
   RDAT_ENUM_VALUE_NODEF(Coalescing)
   RDAT_ENUM_VALUE_NODEF(Thread)
+  RDAT_ENUM_VALUE_NODEF(Reserved_Mesh)
   RDAT_ENUM_VALUE_NODEF(LastEntry)
 #if DEF_RDAT_ENUMS == DEF_RDAT_DUMP_IMPL
-  static_assert((unsigned)hlsl::DXIL::NodeLaunchType::LastEntry == 4,
+  static_assert((unsigned)hlsl::DXIL::NodeLaunchType::LastEntry == 5,
                 "otherwise, RDAT_DXIL_ENUM definition needs updating");
 #endif
 RDAT_ENUM_END()
@@ -561,9 +565,13 @@ RDAT_DXIL_ENUM_START(hlsl::DXIL::ComponentType, uint32_t)
   RDAT_ENUM_VALUE_NODEF(UNormF64)
   RDAT_ENUM_VALUE_NODEF(PackedS8x32)
   RDAT_ENUM_VALUE_NODEF(PackedU8x32)
+  RDAT_ENUM_VALUE_NODEF(U8)
+  RDAT_ENUM_VALUE_NODEF(I8)
+  RDAT_ENUM_VALUE_NODEF(F8_E4M3)
+  RDAT_ENUM_VALUE_NODEF(F8_E5M2)
   RDAT_ENUM_VALUE_NODEF(LastEntry)
 #if DEF_RDAT_ENUMS == DEF_RDAT_DUMP_IMPL
-  static_assert((unsigned)hlsl::DXIL::ComponentType::LastEntry == 19,
+  static_assert((unsigned)hlsl::DXIL::ComponentType::LastEntry == 23,
                 "otherwise, RDAT_DXIL_ENUM definition needs updating");
 #endif
 RDAT_ENUM_END()

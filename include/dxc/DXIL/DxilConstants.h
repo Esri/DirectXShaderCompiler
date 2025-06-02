@@ -29,7 +29,7 @@ namespace DXIL {
 const unsigned kDxilMajor = 1;
 /* <py::lines('VALRULE-TEXT')>hctdb_instrhelp.get_dxil_version_minor()</py>*/
 // VALRULE-TEXT:BEGIN
-const unsigned kDxilMinor = 8;
+const unsigned kDxilMinor = 9;
 // VALRULE-TEXT:END
 
 inline unsigned MakeDxilVersion(unsigned DxilMajor, unsigned DxilMinor) {
@@ -147,32 +147,47 @@ const unsigned kMaxMSTotalSigRows = 32;
 const unsigned kMaxMSSMSize = 1024 * 28;
 const unsigned kMinWaveSize = 4;
 const unsigned kMaxWaveSize = 128;
+const unsigned kDefaultMaxVectorLength = 4;
+const unsigned kSM69MaxVectorLength = 1024;
 
 const float kMaxMipLodBias = 15.99f;
 const float kMinMipLodBias = -16.0f;
 
 const unsigned kResRetStatusIndex = 4;
 
+/* <py::lines('OLOAD_DIMS-TEXT')>hctdb_instrhelp.get_max_oload_dims()</py>*/
+// OLOAD_DIMS-TEXT:BEGIN
+const unsigned kDxilMaxOloadDims = 2;
+// OLOAD_DIMS-TEXT:END
+
 enum class ComponentType : uint32_t {
   Invalid = 0,
-  I1,
-  I16,
-  U16,
-  I32,
-  U32,
-  I64,
-  U64,
-  F16,
-  F32,
-  F64,
-  SNormF16,
-  UNormF16,
-  SNormF32,
-  UNormF32,
-  SNormF64,
-  UNormF64,
-  PackedS8x32,
-  PackedU8x32,
+  I1 = 1,
+  I16 = 2,
+  U16 = 3,
+  I32 = 4,
+  U32 = 5,
+  I64 = 6,
+  U64 = 7,
+  F16 = 8,
+  F32 = 9,
+  F64 = 10,
+  SNormF16 = 11,
+  UNormF16 = 12,
+  SNormF32 = 13,
+  UNormF32 = 14,
+  SNormF64 = 15,
+  UNormF64 = 16,
+  PackedS8x32 = 17,
+  PackedU8x32 = 18,
+
+  // BEGIN NEW FOR SM 6.9
+  U8 = 19,
+  I8 = 20,
+  F8_E4M3 = 21,
+  F8_E5M2 = 22,
+  // END
+
   LastEntry
 };
 
@@ -463,6 +478,11 @@ inline bool IsTBuffer(DXIL::ResourceKind ResourceKind) {
   return ResourceKind == DXIL::ResourceKind::TBuffer;
 }
 
+inline bool IsCTBuffer(DXIL::ResourceKind ResourceKind) {
+  return ResourceKind == DXIL::ResourceKind::CBuffer ||
+         ResourceKind == DXIL::ResourceKind::TBuffer;
+}
+
 /// Whether the resource kind is a FeedbackTexture.
 inline bool IsFeedbackTexture(DXIL::ResourceKind ResourceKind) {
   return ResourceKind == DXIL::ResourceKind::FeedbackTexture2D ||
@@ -474,6 +494,36 @@ inline bool IsFeedbackTexture(DXIL::ResourceKind ResourceKind) {
 // OPCODE-ENUM:BEGIN
 // Enumeration for operations specified by DXIL
 enum class OpCode : unsigned {
+  //
+  Reserved0 = 226,   // Reserved
+  Reserved1 = 227,   // Reserved
+  Reserved10 = 236,  // Reserved
+  Reserved11 = 237,  // Reserved
+  Reserved2 = 228,   // Reserved
+  Reserved3 = 229,   // Reserved
+  Reserved4 = 230,   // Reserved
+  Reserved5 = 231,   // Reserved
+  Reserved6 = 232,   // Reserved
+  Reserved7 = 233,   // Reserved
+  Reserved8 = 234,   // Reserved
+  Reserved9 = 235,   // Reserved
+  ReservedA0 = 259,  // reserved
+  ReservedA1 = 260,  // reserved
+  ReservedA2 = 261,  // reserved
+  ReservedB28 = 290, // reserved
+  ReservedB29 = 291, // reserved
+  ReservedB30 = 292, // reserved
+  ReservedC0 = 293,  // reserved
+  ReservedC1 = 294,  // reserved
+  ReservedC2 = 295,  // reserved
+  ReservedC3 = 296,  // reserved
+  ReservedC4 = 297,  // reserved
+  ReservedC5 = 298,  // reserved
+  ReservedC6 = 299,  // reserved
+  ReservedC7 = 300,  // reserved
+  ReservedC8 = 301,  // reserved
+  ReservedC9 = 302,  // reserved
+
   // Amplification shader instructions
   DispatchMesh = 173, // Amplification shader intrinsic DispatchMesh
 
@@ -621,8 +671,9 @@ enum class OpCode : unsigned {
   TraceRay = 157,   // initiates raytrace
 
   // Inline Ray Query
-  AllocateRayQuery = 178, // allocates space for RayQuery and return handle
-  RayQuery_Abort = 181,   // aborts a ray query
+  AllocateRayQuery = 178,  // allocates space for RayQuery and return handle
+  AllocateRayQuery2 = 258, // allocates space for RayQuery and return handle
+  RayQuery_Abort = 181,    // aborts a ray query
   RayQuery_CandidateGeometryIndex = 203, // returns candidate hit geometry index
   RayQuery_CandidateInstanceContributionToHitGroupIndex =
       214, // returns candidate hit InstanceContributionToHitGroupIndex
@@ -699,6 +750,19 @@ enum class OpCode : unsigned {
   // Library create handle from resource struct (like HL intrinsic)
   CreateHandleForLib =
       160, // create resource handle from resource struct for library
+
+  // Linear Algebra Operations
+  MatVecMul =
+      305, // Multiplies a MxK dimension matrix and a K sized input vector
+  MatVecMulAdd = 306, // multiplies a MxK dimension matrix and a K sized input
+                      // vector and adds an M-sized bias vector
+  OuterProductAccumulate =
+      307, // Computes the outer product between column vectors and an MxN
+           // matrix is accumulated component-wise atomically (with device
+           // scope) in memory
+  VectorAccumulate = 308, // Accumulates the components of a vector
+                          // component-wise atomically (with device scope) to
+                          // the corresponding elements of an array in memory
 
   // Mesh shader instructions
   EmitIndices = 169, // emit a primitive's vertex indices in a mesh shader
@@ -829,8 +893,11 @@ enum class OpCode : unsigned {
   GetDimensions = 72,   // gets texture size information
   RawBufferLoad = 139,  // reads from a raw buffer and structured buffer
   RawBufferStore = 140, // writes to a RWByteAddressBuffer or RWStructuredBuffer
-  TextureLoad = 66,     // reads texel data without any filtering or sampling
-  TextureStore = 67,    // reads texel data without any filtering or sampling
+  RawBufferVectorLoad = 303, // reads from a raw buffer and structured buffer
+  RawBufferVectorStore =
+      304,           // writes to a RWByteAddressBuffer or RWStructuredBuffer
+  TextureLoad = 66,  // reads texel data without any filtering or sampling
+  TextureStore = 67, // reads texel data without any filtering or sampling
   TextureStoreSample = 225, // stores texel data at specified sample index
 
   // Sampler Feedback
@@ -842,6 +909,49 @@ enum class OpCode : unsigned {
                                    // operation with explicit gradients
   WriteSamplerFeedbackLevel = 176, // updates a feedback texture for a sampling
                                    // operation with a mipmap-level offset
+
+  // Shader Execution Reordering
+  HitObject_Attributes = 289,   // Returns the attributes set for this HitObject
+  HitObject_FromRayQuery = 263, // Creates a new HitObject representing a
+                                // committed hit from a RayQuery
+  HitObject_FromRayQueryWithAttrs =
+      264, // Creates a new HitObject representing a committed hit from a
+           // RayQuery and committed attributes
+  HitObject_GeometryIndex = 281, // Returns the geometry index committed on hit
+  HitObject_HitKind = 285,       // Returns the HitKind of the hit
+  HitObject_InstanceID = 283,    // Returns the instance id committed on hit
+  HitObject_InstanceIndex = 282, // Returns the instance index committed on hit
+  HitObject_Invoke = 267, // Represents the invocation of the CH/MS shader
+                          // represented by the HitObject
+  HitObject_IsHit = 270,  // Returns `true` if the HitObject is a NOP-HitObject
+  HitObject_IsMiss = 269, // Returns `true` if the HitObject represents a miss
+  HitObject_IsNop = 271,  // Returns `true` if the HitObject represents a nop
+  HitObject_LoadLocalRootTableConstant =
+      288, // Returns the root table constant for this HitObject and offset
+  HitObject_MakeMiss = 265, // Creates a new HitObject representing a miss
+  HitObject_MakeNop = 266,  // Creates an empty nop HitObject
+  HitObject_ObjectRayDirection =
+      278,                          // Returns the ray direction in object space
+  HitObject_ObjectRayOrigin = 277,  // Returns the ray origin in object space
+  HitObject_ObjectToWorld3x4 = 279, // Returns the object to world space
+                                    // transformation matrix in 3x4 form
+  HitObject_PrimitiveIndex =
+      284,                  // Returns the primitive index committed on hit
+  HitObject_RayFlags = 272, // Returns the ray flags set in the HitObject
+  HitObject_RayTCurrent =
+      274,                 // Returns the current T value set in the HitObject
+  HitObject_RayTMin = 273, // Returns the TMin value set in the HitObject
+  HitObject_SetShaderTableIndex =
+      287, // Returns a HitObject with updated shader table index
+  HitObject_ShaderTableIndex =
+      286, // Returns the shader table index set for this HitObject
+  HitObject_TraceRay = 262, // Analogous to TraceRay but without invoking CH/MS
+                            // and returns the intermediate state as a HitObject
+  HitObject_WorldRayDirection = 276, // Returns the ray direction in world space
+  HitObject_WorldRayOrigin = 275,    // Returns the ray origin in world space
+  HitObject_WorldToObject3x4 = 280,  // Returns the world to object space
+                                     // transformation matrix in 3x4 form
+  MaybeReorderThread = 268,          // Reorders the current thread
 
   // Synchronization
   AtomicBinOp = 78,           // performs an atomic operation on two operands
@@ -946,27 +1056,6 @@ enum class OpCode : unsigned {
   WaveReadLaneAt = 117,    // returns the value from the specified lane
   WaveReadLaneFirst = 118, // returns the value from the first lane
 
-  // WaveMatrix
-  WaveMatrix_Add = 237, // Element-wise accumulate, or broadcast add of fragment
-                        // into accumulator
-  WaveMatrix_Annotate =
-      226, // Annotate a wave matrix pointer with the type information
-  WaveMatrix_Depth =
-      227,               // Returns depth (K) value for matrix of specified type
-  WaveMatrix_Fill = 228, // Fill wave matrix with scalar value
-  WaveMatrix_LoadGroupShared = 230, // Load wave matrix from group shared array
-  WaveMatrix_LoadRawBuf = 229,      // Load wave matrix from raw buffer
-  WaveMatrix_Multiply =
-      233, // Mutiply left and right wave matrix and store in accumulator
-  WaveMatrix_MultiplyAccumulate =
-      234, // Mutiply left and right wave matrix and accumulate into accumulator
-  WaveMatrix_ScalarOp =
-      235, // Perform scalar operation on each element of wave matrix
-  WaveMatrix_StoreGroupShared = 232, // Store wave matrix to group shared array
-  WaveMatrix_StoreRawBuf = 231,      // Store wave matrix to raw buffer
-  WaveMatrix_SumAccumulate = 236, // Sum rows or columns of an input matrix into
-                                  // an existing accumulator fragment matrix
-
   // Work Graph intrinsics
   FinishedCrossGroupSharing = 243, // returns true if the current thread group
                                    // is the last to access the input
@@ -992,7 +1081,7 @@ enum class OpCode : unsigned {
   NumOpCodes_Dxil_1_7 = 226,
   NumOpCodes_Dxil_1_8 = 258,
 
-  NumOpCodes = 258 // exclusive last value of enumeration
+  NumOpCodes = 309 // exclusive last value of enumeration
 };
 // OPCODE-ENUM:END
 
@@ -1003,6 +1092,9 @@ enum class OpCode : unsigned {
 // OPCODECLASS-ENUM:BEGIN
 // Groups for DXIL operations with equivalent function templates
 enum class OpCodeClass : unsigned {
+  //
+  Reserved,
+
   // Amplification shader instructions
   DispatchMesh,
 
@@ -1110,6 +1202,7 @@ enum class OpCodeClass : unsigned {
 
   // Inline Ray Query
   AllocateRayQuery,
+  AllocateRayQuery2,
   RayQuery_Abort,
   RayQuery_CommitNonOpaqueTriangleHit,
   RayQuery_CommitProceduralPrimitiveHit,
@@ -1128,6 +1221,12 @@ enum class OpCodeClass : unsigned {
 
   // Library create handle from resource struct (like HL intrinsic)
   CreateHandleForLib,
+
+  // Linear Algebra Operations
+  MatVecMul,
+  MatVecMulAdd,
+  OuterProductAccumulate,
+  VectorAccumulate,
 
   // Mesh shader instructions
   EmitIndices,
@@ -1222,6 +1321,8 @@ enum class OpCodeClass : unsigned {
   GetDimensions,
   RawBufferLoad,
   RawBufferStore,
+  RawBufferVectorLoad,
+  RawBufferVectorStore,
   TextureLoad,
   TextureStore,
   TextureStoreSample,
@@ -1231,6 +1332,21 @@ enum class OpCodeClass : unsigned {
   WriteSamplerFeedbackBias,
   WriteSamplerFeedbackGrad,
   WriteSamplerFeedbackLevel,
+
+  // Shader Execution Reordering
+  HitObject_Attributes,
+  HitObject_FromRayQuery,
+  HitObject_FromRayQueryWithAttrs,
+  HitObject_Invoke,
+  HitObject_LoadLocalRootTableConstant,
+  HitObject_MakeMiss,
+  HitObject_MakeNop,
+  HitObject_SetShaderTableIndex,
+  HitObject_StateMatrix,
+  HitObject_StateScalar,
+  HitObject_StateVector,
+  HitObject_TraceRay,
+  MaybeReorderThread,
 
   // Synchronization
   AtomicBinOp,
@@ -1278,18 +1394,6 @@ enum class OpCodeClass : unsigned {
   WaveReadLaneAt,
   WaveReadLaneFirst,
 
-  // WaveMatrix
-  WaveMatrix_Accumulate,
-  WaveMatrix_Annotate,
-  WaveMatrix_Depth,
-  WaveMatrix_Fill,
-  WaveMatrix_LoadGroupShared,
-  WaveMatrix_LoadRawBuf,
-  WaveMatrix_Multiply,
-  WaveMatrix_ScalarOp,
-  WaveMatrix_StoreGroupShared,
-  WaveMatrix_StoreRawBuf,
-
   // Work Graph intrinsics
   FinishedCrossGroupSharing,
   GetInputRecordCount,
@@ -1306,9 +1410,9 @@ enum class OpCodeClass : unsigned {
   NumOpClasses_Dxil_1_5 = 143,
   NumOpClasses_Dxil_1_6 = 149,
   NumOpClasses_Dxil_1_7 = 153,
-  NumOpClasses_Dxil_1_8 = 183,
+  NumOpClasses_Dxil_1_8 = 174,
 
-  NumOpClasses = 183 // exclusive last value of enumeration
+  NumOpClasses = 194 // exclusive last value of enumeration
 };
 // OPCODECLASS-ENUM:END
 
@@ -1367,6 +1471,12 @@ const unsigned kRawBufferLoadElementOffsetOpIdx = 3;
 const unsigned kRawBufferLoadMaskOpIdx = 4;
 const unsigned kRawBufferLoadAlignmentOpIdx = 5;
 
+// RawBufferVectorLoad.
+const unsigned kRawBufferVectorLoadHandleOpIdx = 1;
+const unsigned kRawBufferVectorLoadIndexOpIdx = 2;
+const unsigned kRawBufferVectorLoadElementOffsetOpIdx = 3;
+const unsigned kRawBufferVectorLoadAlignmentOpIdx = 4;
+
 // RawBufferStore
 const unsigned kRawBufferStoreHandleOpIdx = 1;
 const unsigned kRawBufferStoreIndexOpIdx = 2;
@@ -1376,7 +1486,14 @@ const unsigned kRawBufferStoreVal1OpIdx = 5;
 const unsigned kRawBufferStoreVal2OpIdx = 6;
 const unsigned kRawBufferStoreVal3OpIdx = 7;
 const unsigned kRawBufferStoreMaskOpIdx = 8;
-const unsigned kRawBufferStoreAlignmentOpIdx = 8;
+const unsigned kRawBufferStoreAlignmentOpIdx = 9;
+
+// RawBufferVectorStore
+const unsigned kRawBufferVectorStoreHandleOpIdx = 1;
+const unsigned kRawBufferVectorStoreIndexOpIdx = 2;
+const unsigned kRawBufferVectorStoreElementOffsetOpIdx = 3;
+const unsigned kRawBufferVectorStoreValOpIdx = 4;
+const unsigned kRawBufferVectorStoreAlignmentOpIdx = 5;
 
 // TextureStore.
 const unsigned kTextureStoreHandleOpIdx = 1;
@@ -1465,6 +1582,38 @@ const unsigned kMSStoreOutputRowOpIdx = 2;
 const unsigned kMSStoreOutputColOpIdx = 3;
 const unsigned kMSStoreOutputVIdxOpIdx = 4;
 const unsigned kMSStoreOutputValOpIdx = 5;
+
+// HitObject::MakeMiss
+const unsigned kHitObjectMakeMiss_RayDescOpIdx = 3;
+const unsigned kHitObjectMakeMiss_NumOp = 11;
+
+// HitObject::TraceRay
+const unsigned kHitObjectTraceRay_RayDescOpIdx = 7;
+const unsigned kHitObjectTraceRay_PayloadOpIdx = 15;
+const unsigned kHitObjectTraceRay_NumOp = 16;
+
+// MatVec Ops
+const unsigned kMatVecMulInputVectorIdx = 1;
+const unsigned kMatVecMulIsInputUnsignedIdx = 2;
+const unsigned kMatVecMulInputInterpretationIdx = 3;
+const unsigned kMatVecMulMatrixBufferIdx = 4;
+const unsigned kMatVecMulMatrixOffsetIdx = 5;
+const unsigned kMatVecMulMatrixInterpretationIdx = 6;
+const unsigned kMatVecMulMatrixMIdx = 7;
+const unsigned kMatVecMulMatrixKIdx = 8;
+const unsigned kMatVecMulMatrixLayoutIdx = 9;
+const unsigned kMatVecMulMatrixTransposeIdx = 10;
+const unsigned kMatVecMulMatrixStrideIdx = 11;
+const unsigned kMatVecMulIsOutputUnsignedIdx = 12;
+
+// MatVecAdd
+const unsigned kMatVecMulAddBiasInterpretation = 14;
+const unsigned kMatVecMulAddIsOutputUnsignedIdx = 15;
+
+// Outer Product Accumulate
+const unsigned kOuterProdAccMatrixInterpretation = 5;
+const unsigned kOuterProdAccMatrixLayout = 6;
+const unsigned kOuterProdAccMatrixStride = 7;
 
 // TODO: add operand index for all the OpCodeClass.
 } // namespace OperandIndex
@@ -1604,6 +1753,7 @@ enum class NodeLaunchType {
   Broadcasting,
   Coalescing,
   Thread,
+  Reserved_Mesh,
 
   LastEntry
 };
@@ -1789,7 +1939,11 @@ enum class RayFlag : uint32_t {
   CullNonOpaque = 0x80,
   SkipTriangles = 0x100,
   SkipProceduralPrimitives = 0x200,
+  ForceOMM2State = 0x400
 };
+
+// Corresponds to RAYQUERY_FLAG_* in HLSL
+enum class RayQueryFlag : uint32_t { None = 0, AllowOpacityMicromaps = 1 };
 
 // Packing/unpacking intrinsics
 enum class UnpackMode : uint8_t {
@@ -1816,29 +1970,6 @@ enum class SamplerFeedbackType : uint8_t {
   LastEntry = 2
 };
 
-enum class WaveMatrixKind : uint8_t {
-  Left = 0,
-  Right = 1,
-  LeftColAcc = 2,
-  RightRowAcc = 3,
-  Accumulator = 4,
-  NumKinds = 5,
-  MaskSide = 1,
-  MaskClass = 6, // 0 = Left/Right, 2 = Fragment, 4 = Accumulator
-};
-
-/* <py::lines('WAVEMATRIXSCALAROPCODE-ENUM')>hctdb_instrhelp.get_enum_decl("WaveMatrixScalarOpCode")</py>*/
-// WAVEMATRIXSCALAROPCODE-ENUM:BEGIN
-// Operation for WaveMatrix_ScalarOp
-enum class WaveMatrixScalarOpCode : unsigned {
-  Add = 0,
-  Divide = 3,
-  Invalid = 4,
-  Multiply = 2,
-  Subtract = 1,
-};
-// WAVEMATRIXSCALAROPCODE-ENUM:END
-
 // Corresponds to MEMORY_TYPE_FLAG enums in HLSL
 enum class MemoryTypeFlag : uint32_t {
   UavMemory = 0x00000001,         // UAV_MEMORY
@@ -1857,7 +1988,9 @@ enum class BarrierSemanticFlag : uint32_t {
   GroupSync = 0x00000001,   // GROUP_SYNC
   GroupScope = 0x00000002,  // GROUP_SCOPE
   DeviceScope = 0x00000004, // DEVICE_SCOPE
-  ValidMask = 0x00000007,
+  LegacyFlags = 0x00000007,
+  ReorderScope = 0x00000008, // REORDER_SCOPE
+  ValidMask = 0x0000000F,
   GroupFlags = GroupSync | GroupScope,
 };
 
@@ -1921,8 +2054,7 @@ const uint64_t ShaderFeatureInfo_SampleCmpGradientOrBias = 0x80000000;
 const uint64_t ShaderFeatureInfo_ExtendedCommandInfo = 0x100000000;
 
 // Experimental SM 6.9+ - Reserved, not yet supported.
-// WaveMMA slots in between two SM 6.6 feature bits.
-const uint64_t ShaderFeatureInfo_WaveMMA = 0x8000000;
+const uint64_t ShaderFeatureInfo_Reserved = 0x8000000;
 
 // Maximum count without rolling over into another 64-bit field is 40,
 // so the last flag we can use for a feature requirement is: 0x8000000000
@@ -1996,7 +2128,9 @@ enum class RaytracingPipelineFlags : uint32_t {
   None = 0x0,
   SkipTriangles = 0x100,
   SkipProceduralPrimitives = 0x200,
-  ValidMask = 0x300,
+  ValidMask_1_8 = 0x300,         // valid mask up through DXIL 1.8
+  AllowOpacityMicromaps = 0x400, // Allow Opacity Micromaps to be used
+  ValidMask = 0x700,             // current valid mask
 };
 
 enum class CommittedStatus : uint32_t {
@@ -2051,6 +2185,13 @@ extern const char *kDxIsHelperGlobalName;
 extern const char *kHostLayoutTypePrefix;
 
 extern const char *kWaveOpsIncludeHelperLanesString;
+
+enum class LinalgMatrixLayout : uint32_t {
+  RowMajor = 0,
+  ColumnMajor = 1,
+  MulOptimal = 2,
+  OuterProductOptimal = 3,
+};
 
 } // namespace DXIL
 

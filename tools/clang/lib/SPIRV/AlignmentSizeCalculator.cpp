@@ -22,6 +22,15 @@ inline uint32_t roundToPow2(uint32_t val, uint32_t pow2) {
   return (val + pow2 - 1) & ~(pow2 - 1);
 }
 
+/// Returns the smallest value greater than or equal to |val| that is a multiple
+/// of |multiple|.
+inline uint32_t roundToMultiple(uint32_t val, uint32_t multiple) {
+  if (val == 0)
+    return 0;
+  uint32_t t = (val - 1) / multiple;
+  return (multiple * (t + 1));
+}
+
 /// Returns true if the given vector type (of the given size) crosses the
 /// 4-component vector boundary if placed at the given offset.
 bool improperStraddle(clang::QualType type, int size, int offset) {
@@ -133,11 +142,18 @@ std::pair<uint32_t, uint32_t> AlignmentSizeCalculator::getAlignmentAndSize(
     }
 
     // Reset the current offset to the one specified in the source code
-    // if exists. It's debatable whether we should do sanity check here.
-    // If the developers want manually control the layout, we leave
-    // everything to them.
+    // if exists. We issues a warning instead of an error if the offset is not
+    // correctly aligned. This allows uses to disable validation, and use the
+    // alignment specified in the source code if they are sure that is what they
+    // want.
     if (const auto *offsetAttr = field->getAttr<VKOffsetAttr>()) {
       structSize = offsetAttr->getOffset();
+      if (structSize % memberAlignment != 0) {
+        emitWarning(
+            "The offset provided in the attribute should be %0-byte aligned.",
+            field->getLocation())
+            << memberAlignment;
+      }
     }
 
     // The base alignment of the structure is N, where N is the largest
@@ -261,14 +277,20 @@ std::pair<uint32_t, uint32_t> AlignmentSizeCalculator::getAlignmentAndSize(
   if (recordType != nullptr) {
     const llvm::StringRef name = recordType->getDecl()->getName();
 
-    if (isTypeInVkNamespace(recordType) && name == "SpirvType") {
-      const ClassTemplateSpecializationDecl *templateDecl =
-          cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
-      const uint64_t size =
-          templateDecl->getTemplateArgs()[1].getAsIntegral().getZExtValue();
-      const uint64_t alignment =
-          templateDecl->getTemplateArgs()[2].getAsIntegral().getZExtValue();
-      return {alignment, size};
+    if (isTypeInVkNamespace(recordType)) {
+      if (name == "BufferPointer") {
+        return {8, 8}; // same as uint64_t
+      }
+
+      if (name == "SpirvType") {
+        const ClassTemplateSpecializationDecl *templateDecl =
+            cast<ClassTemplateSpecializationDecl>(recordType->getDecl());
+        const uint64_t size =
+            templateDecl->getTemplateArgs()[1].getAsIntegral().getZExtValue();
+        const uint64_t alignment =
+            templateDecl->getTemplateArgs()[2].getAsIntegral().getZExtValue();
+        return {alignment, size};
+      }
     }
   }
 
@@ -404,7 +426,7 @@ std::pair<uint32_t, uint32_t> AlignmentSizeCalculator::getAlignmentAndSize(
 
     if (rule == SpirvLayoutRule::FxcSBuffer ||
         rule == SpirvLayoutRule::Scalar) {
-      *stride = size;
+      *stride = roundToMultiple(size, alignment);
       // Use element alignment for fxc structured buffers and
       // VK_EXT_scalar_block_layout
       return {alignment, size * elemCount};
