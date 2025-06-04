@@ -3804,9 +3804,8 @@ public:
   bool CheckHLSLUnaryExprOrTypeTraitOperand(QualType ExprType, SourceLocation Loc,
                                             UnaryExprOrTypeTrait ExprKind);
   void DiagnoseHLSLDeclAttr(const Decl *D, const Attr *A);
-  void DiagnoseGloballyCoherentMismatch(const Expr *SrcExpr,
-                                        QualType TargetType,
-                                        SourceLocation Loc);
+  void DiagnoseCoherenceMismatch(const Expr *SrcExpr, QualType TargetType,
+                                 SourceLocation Loc);
   void CheckHLSLFunctionCall(FunctionDecl *FDecl, CallExpr *TheCall,
                              const FunctionProtoType *Proto);
   void DiagnoseReachableHLSLCall(CallExpr *CE, const hlsl::ShaderModel *SM,
@@ -9108,6 +9107,8 @@ public:
                                 bool isImplicit);
   QualType getHLSLDefaultSpecialization(TemplateDecl *Decl);
   // HLSL Change End - adjust this from T* to T&-like
+
+  void DiagnoseSemanticDecl(hlsl::SemanticDecl *Decl); // HLSL Change
 };
 
 /// \brief RAII object that enters a new expression evaluation context.

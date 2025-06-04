@@ -115,7 +115,7 @@ struct RewriterOpts {
 };
 
 enum class ValidatorSelection : int {
-  Auto,        // Try DXIL.dll; fallback to internal validator
+  Auto,        // Force internal validator (even if DXIL.dll is present)
   Internal,    // Force internal validator (even if DXIL.dll is present)
   External,    // Use DXIL.dll, failing compilation if not available
   Invalid = -1 // Invalid
@@ -274,6 +274,8 @@ public:
       SpirvOptions; // All SPIR-V CodeGen-related options
 #endif
   // SPIRV Change Ends
+
+  bool GenMetal = false; // OPT_metal
 };
 
 /// Use this class to capture, convert and handle the lifetime for the

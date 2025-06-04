@@ -4,6 +4,7 @@
 //
 // This file is distributed under the University of Illinois Open Source
 // License. See LICENSE.TXT for details.
+//
 //===----------------------------------------------------------------------===//
 //
 //  This file defines a SPIR-V emitter class that takes in HLSL AST and emits
@@ -25,6 +26,7 @@
 #include "clang/AST/AST.h"
 #include "clang/AST/ASTConsumer.h"
 #include "clang/AST/ASTContext.h"
+#include "clang/AST/ParentMap.h"
 #include "clang/AST/TypeOrdering.h"
 #include "clang/Basic/Diagnostic.h"
 #include "clang/Frontend/CompilerInstance.h"
@@ -35,6 +37,7 @@
 
 #include "ConstEvaluator.h"
 #include "DeclResultIdMapper.h"
+#include "spirv-tools/optimizer.hpp"
 
 namespace spvtools {
 namespace opt {
@@ -72,10 +75,14 @@ public:
   /// created, we just return RichDebugInfo containing it. Otherwise,
   /// create DebugSource and DebugCompilationUnit for loc and return it.
   RichDebugInfo *getOrCreateRichDebugInfo(const SourceLocation &loc);
+  RichDebugInfo *getOrCreateRichDebugInfoImpl(llvm::StringRef file);
 
   void doDecl(const Decl *decl);
   void doStmt(const Stmt *stmt, llvm::ArrayRef<const Attr *> attrs = {});
   SpirvInstruction *doExpr(const Expr *expr, SourceRange rangeOverride = {});
+  SpirvInstruction *doExprEnsuringRValue(const Expr *expr,
+                                         SourceLocation location,
+                                         SourceRange range);
 
   /// Processes the given expression and emits SPIR-V instructions. If the
   /// result is a GLValue, does an additional load.
@@ -112,6 +119,11 @@ public:
   createSpirvIntrInstExt(llvm::ArrayRef<const Attr *> attrs, QualType retType,
                          llvm::ArrayRef<SpirvInstruction *> spvArgs,
                          bool isInstr, SourceLocation loc);
+
+  /// \brief Negates to get the additive inverse of SV_Position.y if requested.
+  SpirvInstruction *invertYIfRequested(SpirvInstruction *position,
+                                       SourceLocation loc,
+                                       SourceRange range = {});
 
 private:
   void doFunctionDecl(const FunctionDecl *decl);
@@ -164,7 +176,8 @@ private:
   /// Overload with pre computed SpirvEvalInfo.
   ///
   /// The given expr will not be evaluated again.
-  SpirvInstruction *loadIfGLValue(const Expr *expr, SpirvInstruction *info);
+  SpirvInstruction *loadIfGLValue(const Expr *expr, SpirvInstruction *info,
+                                  SourceRange rangeOverride = {});
 
   /// Loads the pointer of the aliased-to-variable if the given expression is a
   /// DeclRefExpr referencing an alias variable. See DeclResultIdMapper for
@@ -266,6 +279,11 @@ private:
                                const Expr **base = nullptr,
                                const Expr **index = nullptr);
 
+  bool isDescriptorHeap(const Expr *expr);
+
+  void getDescriptorHeapOperands(const Expr *expr, const Expr **base,
+                                 const Expr **index);
+
   /// \brief Returns true if the given CXXOperatorCallExpr is the .mips[][]
   /// access into a Texture or .sample[][] access into Texture2DMS(Array). On
   /// success, writes base texture object into *base if base is not nullptr,
@@ -361,7 +379,14 @@ private:
   /// the value. It returns the <result-id> of the processed vector.
   SpirvInstruction *processEachVectorInMatrix(
       const Expr *matrix, SpirvInstruction *matrixVal,
-      llvm::function_ref<SpirvInstruction *(uint32_t, QualType,
+      llvm::function_ref<SpirvInstruction *(uint32_t, QualType, QualType,
+                                            SpirvInstruction *)>
+          actOnEachVector,
+      SourceLocation loc = {}, SourceRange range = {});
+
+  SpirvInstruction *processEachVectorInMatrix(
+      const Expr *matrix, QualType outputType, SpirvInstruction *matrixVal,
+      llvm::function_ref<SpirvInstruction *(uint32_t, QualType, QualType,
                                             SpirvInstruction *)>
           actOnEachVector,
       SourceLocation loc = {}, SourceRange range = {});
@@ -411,6 +436,10 @@ private:
   /// Validates that vk::* attributes are used correctly and returns false if
   /// errors are found.
   bool validateVKAttributes(const NamedDecl *decl);
+
+  /// Records any Spir-V capabilities and extensions for the given varDecl so
+  /// they will be added to the SPIR-V module.
+  void registerCapabilitiesAndExtensionsForVarDecl(const VarDecl *varDecl);
 
 private:
   /// Converts the given value from the bitwidth of 'fromType' to the bitwidth
@@ -466,6 +495,15 @@ private:
 
   /// Processes the 'lit' intrinsic function.
   SpirvInstruction *processIntrinsicLit(const CallExpr *);
+
+  /// Processes the 'vk::static_pointer_cast' and 'vk_reinterpret_pointer_cast'
+  /// intrinsic functions.
+  SpirvInstruction *processIntrinsicPointerCast(const CallExpr *,
+                                                bool isStatic);
+
+  /// Processes the vk::BufferPointer intrinsic function 'Get'.
+  SpirvInstruction *
+  processIntrinsicGetBufferContents(const CXXMemberCallExpr *);
 
   /// Processes the 'GroupMemoryBarrier', 'GroupMemoryBarrierWithGroupSync',
   /// 'DeviceMemoryBarrier', 'DeviceMemoryBarrierWithGroupSync',
@@ -598,6 +636,12 @@ private:
   SpirvInstruction *processIntrinsicMemberCall(const CXXMemberCallExpr *expr,
                                                hlsl::IntrinsicOp opcode);
 
+  /// Processes EvaluateAttributeAt* intrinsic calls.
+  SpirvInstruction *processEvaluateAttributeAt(const CallExpr *expr,
+                                               hlsl::IntrinsicOp opcode,
+                                               SourceLocation loc,
+                                               SourceRange range);
+
   /// Processes Interlocked* intrinsic functions.
   SpirvInstruction *processIntrinsicInterlockedMethod(const CallExpr *,
                                                       hlsl::IntrinsicOp);
@@ -626,6 +670,10 @@ private:
   /// Processes SM6.0 quad-wide shuffle.
   SpirvInstruction *processWaveQuadWideShuffle(const CallExpr *,
                                                hlsl::IntrinsicOp op);
+
+  /// Processes SM6.7 quad any/all.
+  SpirvInstruction *processWaveQuadAnyAll(const CallExpr *,
+                                          hlsl::IntrinsicOp op);
 
   /// Generates the Spir-V instructions needed to implement the given call to
   /// WaveActiveAllEqual. Returns a pointer to the instruction that produces the
@@ -729,13 +777,33 @@ private:
   /// `vk::RawBufferStore()`.
   uint32_t getRawBufferAlignment(const Expr *expr);
 
+  /// Returns a spirv OpCooperativeMatrixLengthKHR instruction generated from a
+  /// call to __builtin_spv_CooperativeMatrixLengthKHR.
+  SpirvInstruction *processCooperativeMatrixGetLength(const CallExpr *call);
+
   /// Process vk::ext_execution_mode intrinsic
-  SpirvInstruction *processIntrinsicExecutionMode(const CallExpr *expr,
-                                                  bool useIdParams);
+  SpirvInstruction *processIntrinsicExecutionMode(const CallExpr *expr);
+  /// Process vk::ext_execution_mode_id intrinsic
+  SpirvInstruction *processIntrinsicExecutionModeId(const CallExpr *expr);
 
   /// Processes the 'firstbit{high|low}' intrinsic functions.
   SpirvInstruction *processIntrinsicFirstbit(const CallExpr *,
                                              GLSLstd450 glslOpcode);
+
+  SpirvInstruction *
+  processMatrixDerivativeIntrinsic(hlsl::IntrinsicOp hlslOpcode,
+                                   const Expr *arg, SourceLocation loc,
+                                   SourceRange range);
+
+  SpirvInstruction *processDerivativeIntrinsic(hlsl::IntrinsicOp hlslOpcode,
+                                               const Expr *arg,
+                                               SourceLocation loc,
+                                               SourceRange range);
+
+  SpirvInstruction *processDerivativeIntrinsic(hlsl::IntrinsicOp hlslOpcode,
+                                               SpirvInstruction *arg,
+                                               SourceLocation loc,
+                                               SourceRange range);
 
 private:
   /// Returns the <result-id> for constant value 0 of the given type.
@@ -814,8 +882,14 @@ private:
   processMeshOrAmplificationShaderAttributes(const FunctionDecl *decl,
                                              uint32_t *outVerticesArraySize);
 
-  /// \brief Emits a wrapper function for the entry function and returns true
-  /// on success.
+  /// \brief Emits a SpirvDebugFunction to match given SpirvFunction, and
+  /// returns a pointer to it.
+  SpirvDebugFunction *emitDebugFunction(const FunctionDecl *decl,
+                                        SpirvFunction *func,
+                                        RichDebugInfo **info, std::string name);
+
+  /// \brief Emits a wrapper function for the entry function and returns a
+  /// pointer to the wrapper SpirvFunction on success.
   ///
   /// The wrapper function loads the values of all stage input variables and
   /// creates composites as expected by the source code entry function. It then
@@ -825,9 +899,10 @@ private:
   ///
   /// The wrapper function is also responsible for initializing global static
   /// variables for some cases.
-  bool emitEntryFunctionWrapper(const FunctionDecl *entryFunction,
-                                SpirvFunction *entryFuncId,
-                                SpirvDebugFunction *debugFunction);
+  SpirvFunction *emitEntryFunctionWrapper(const FunctionDecl *entryFunction,
+                                          RichDebugInfo **info,
+                                          SpirvDebugFunction **debugFunction,
+                                          SpirvFunction *entryFuncId);
 
   /// \brief Emits a wrapper function for the entry functions for raytracing
   /// stages and returns true on success.
@@ -837,8 +912,8 @@ private:
   /// The wrapper function is also responsible for initializing global static
   /// variables for some cases.
   bool emitEntryFunctionWrapperForRayTracing(const FunctionDecl *entryFunction,
-                                             SpirvFunction *entryFuncId,
-                                             SpirvDebugFunction *debugFunction);
+                                             SpirvDebugFunction *debugFunction,
+                                             SpirvFunction *entryFuncId);
 
   /// \brief Performs the following operations for the Hull shader:
   /// * Creates an output variable which is an Array containing results for all
@@ -958,6 +1033,13 @@ private:
                                 SpirvInstruction **constOffset,
                                 SpirvInstruction **varOffset);
 
+  void handleOptionalTextureSampleArgs(const CXXMemberCallExpr *expr,
+                                       uint32_t index,
+                                       SpirvInstruction **constOffset,
+                                       SpirvInstruction **varOffset,
+                                       SpirvInstruction **clamp,
+                                       SpirvInstruction **status);
+
   /// \brief Processes .Load() method call for Buffer/RWBuffer and texture
   /// objects.
   SpirvInstruction *processBufferTextureLoad(const CXXMemberCallExpr *);
@@ -987,6 +1069,12 @@ private:
 
   /// \brief Processes .SampleCmp() method call for texture objects.
   SpirvInstruction *processTextureSampleCmp(const CXXMemberCallExpr *expr);
+
+  /// \brief Processes .SampleCmpBias() method call for texture objects.
+  SpirvInstruction *processTextureSampleCmpBias(const CXXMemberCallExpr *expr);
+
+  /// \brief Processes .SampleCmpGrad() method call for texture objects.
+  SpirvInstruction *processTextureSampleCmpGrad(const CXXMemberCallExpr *expr);
 
   /// \brief Processes .SampleCmpLevelZero() method call for texture objects.
   SpirvInstruction *
@@ -1180,6 +1268,19 @@ private:
   /// Returns true on success and false otherwise.
   bool spirvToolsOptimize(std::vector<uint32_t> *mod, std::string *messages);
 
+  // \brief Runs the pass represented by the given pass token on the module.
+  // Returns true if the pass was successfully run. Any messages from the
+  // optimizer are returned in `messages`.
+  bool spirvToolsRunPass(std::vector<uint32_t> *mod,
+                         spvtools::Optimizer::PassToken token,
+                         std::string *messages);
+
+  // \brief Calls SPIRV-Tools optimizer fix-opextinst-opcodes pass. This pass
+  // fixes OpExtInst/OpExtInstWithForwardRefsKHR opcodes to use the correct one
+  // depending of the presence of forward references.
+  bool spirvToolsFixupOpExtInst(std::vector<uint32_t> *mod,
+                                std::string *messages);
+
   // \brief Calls SPIRV-Tools optimizer's, but only with the capability trimming
   // pass. Removes unused capabilities from the given SPIR-V module |mod|, and
   // returns info/warning/error messages via |messages|. This pass doesn't trim
@@ -1187,6 +1288,13 @@ private:
   // headers.
   bool spirvToolsTrimCapabilities(std::vector<uint32_t> *mod,
                                   std::string *messages);
+
+  // \brief Runs the upgrade memory model pass using SPIRV-Tools's optimizer.
+  // This pass will modify the module, |mod|, so that it conforms to the Vulkan
+  // memory model instead of the GLSL450 memory model. Returns
+  // info/warning/error messages via |messages|.
+  bool spirvToolsUpgradeToVulkanMemoryModel(std::vector<uint32_t> *mod,
+                                            std::string *messages);
 
   /// \brief Helper function to run SPIRV-Tools optimizer's legalization passes.
   /// Runs the SPIRV-Tools legalization on the given SPIR-V module |mod|, and
@@ -1241,6 +1349,50 @@ private:
   SpirvInstruction *splatScalarToGenerate(QualType type,
                                           SpirvInstruction *scalar,
                                           SpirvLayoutRule rule);
+
+  /// Modifies the instruction in the code that use the GLSL450 memory module to
+  /// use the Vulkan memory model. This is done only if it has been requested or
+  /// the Vulkan memory model capability has been added to the module.
+  bool UpgradeToVulkanMemoryModelIfNeeded(std::vector<uint32_t> *module);
+
+  // Splits the `value`, which must be a 64-bit scalar, into two 32-bit wide
+  // uints, stored in `lowbits` and `highbits`.
+  void splitDouble(SpirvInstruction *value, SourceLocation loc,
+                   SourceRange range, SpirvInstruction *&lowbits,
+                   SpirvInstruction *&highbits);
+
+  // Splits the value, which must be a vector with element type `elemType` and
+  // size `count`, into two composite values of size `count` and type
+  // `outputType`. The elements are split component-wise: the vector
+  // {0x0123456789abcdef, 0x0123456789abcdef} is split into `lowbits`
+  // {0x89abcdef, 0x89abcdef} and and `highbits` {0x01234567, 0x01234567}.
+  void splitDoubleVector(QualType elemType, uint32_t count, QualType outputType,
+                         SpirvInstruction *value, SourceLocation loc,
+                         SourceRange range, SpirvInstruction *&lowbits,
+                         SpirvInstruction *&highbits);
+
+  // Splits the value, which must be a matrix with element type `elemType` and
+  // dimensions `rowCount` and `colCount`, into two composite values of
+  // dimensions `rowCount` and `colCount`. The elements are split
+  // component-wise: the matrix
+  //
+  // { 0x0123456789abcdef, 0x0123456789abcdef,
+  //   0x0123456789abcdef, 0x0123456789abcdef }
+  //
+  // is split into `lowbits`
+  //
+  // { 0x89abcdef, 0x89abcdef,
+  //   0x89abcdef, 0x89abcdef }
+  //
+  //  and `highbits`
+  //
+  // { 0x012345678, 0x012345678,
+  //   0x012345678, 0x012345678 }.
+  void splitDoubleMatrix(QualType elemType, uint32_t rowCount,
+                         uint32_t colCount, QualType outputType,
+                         SpirvInstruction *value, SourceLocation loc,
+                         SourceRange range, SpirvInstruction *&lowbits,
+                         SpirvInstruction *&highbits);
 
 public:
   /// \brief Wrapper method to create a fatal error message and report it
@@ -1421,6 +1573,9 @@ private:
 
   /// The <result-id> of the OpString containing the main source file's path.
   SpirvString *mainSourceFile;
+
+  /// ParentMap of the current function.
+  std::unique_ptr<ParentMap> parentMap = nullptr;
 };
 
 void SpirvEmitter::doDeclStmt(const DeclStmt *declStmt) {
