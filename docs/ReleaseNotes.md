@@ -17,6 +17,49 @@ The included licenses apply to the following files:
 
 ## Changelog
 
+### Upcoming Release
+
+Place release notes for the upcoming release below this line and remove this
+line upon naming the release. Refer to previous for appropriate section names.
+
+#### Experimental Shader Model 6.10
+
+- Removed experimental Cooperative Vector, this has been replaced by LinAlg matrix.
+- Implement GetGroupWaveIndex and GetGroupWaveCount in experimental Shader Model 6.10.
+  - [proposal](https://github.com/microsoft/hlsl-specs/blob/main/proposals/0048-group-wave-index.md)
+  - GetGroupWaveIndex: New intrinsic for Compute, Mesh, Amplification and Node shaders which returns the index of the wave within the thread group that the the thread is executing.
+  - GetGroupWaveCount: New intrinsic for Compute, Mesh, Amplification and Node
+  shaders which returns the total number of waves executing within the thread
+  group.
+- Added `DebugBreak()` and `dx::IsDebuggerPresent()` intrinsics for shader debugging (experimental Shader Model 6.10).
+  - `DebugBreak()` triggers a breakpoint if a debugger is attached.
+  - `dx::IsDebuggerPresent()` returns true if a debugger is attached.
+  - SPIR-V: `DebugBreak()` emits `NonSemantic.DebugBreak` extended instruction; `IsDebuggerPresent()` is not supported.
+
+#### Bug Fixes
+
+- Fixed non-deterministic DXIL/PDB output when compiling shaders with resource
+  arrays, debug info, and SM 6.6+.
+  [#8171](https://github.com/microsoft/DirectXShaderCompiler/issues/8171)
+- Fixed mesh shader semantics that were incorrectly case sensitive.
+- User-defined conversion operators (e.g., `operator float4()`) now produce an
+  error instead of being silently ignored.
+  [#5103](https://github.com/microsoft/DirectXShaderCompiler/pull/8206)
+- DXIL validation: added validation for `CreateHandleFromBinding`.
+- DXIL validation now rejects non-standard integer bit widths (e.g. `i25`) in
+  instructions.
+
+#### Other Changes
+
+- `/P` now matches `cl.exe` behavior: preprocesses to `<inputname>.i` by
+  default, with `/Fi` to override the output filename. The old FXC-style `/P
+   <filename>` positional syntax has been renamed to `/Po`.
+  [#4611](https://github.com/microsoft/DirectXShaderCompiler/issues/4611).
+- SPIR-V: Support `vk::SampledTexture` types (GLSL's `samplerND` equivalent)
+  [#7979](https://github.com/microsoft/DirectXShaderCompiler/issues/7979). With
+  this type, users no longer need to define both Sampler and Texture resources
+  with the same binding number.
+
 ### Version 1.9.2602
 
 #### Shader Model 6.9 Release
@@ -25,16 +68,6 @@ The included licenses apply to the following files:
   - See [the official blog
   post](https://devblogs.microsoft.com/directx/shader-model-6-9-dxr-1-2-and-agilitysdk-1-619-release)
   for more details.
-
-#### Experimental Shader Model 6.10
-
-- Moved Linear Algebra (Cooperative Vector) DXIL Opcodes to experimental Shader Model 6.10
-- Implement GetGroupWaveIndex and GetGroupWaveCount in experimental Shader Model 6.10.
-  - [proposal](https://github.com/microsoft/hlsl-specs/blob/main/proposals/0048-group-wave-index.md)
-  - GetGroupWaveIndex: New intrinsic for Compute, Mesh, Amplification and Node shaders which returns the index of the wave within the thread group that the the thread is executing.
-  - GetGroupWaveCount: New intrinsic for Compute, Mesh, Amplification and Node
-  shaders which returns the total number of waves executing within the thread
-  group.
 
 #### Noteble SPIR-V updates
 
@@ -80,7 +113,6 @@ The included licenses apply to the following files:
 - Several small bug fixes.
 
 #### Other Changes
-
 - Fixed regression: [#7510](https://github.com/microsoft/DirectXShaderCompiler/issues/7510) crash when calling `sizeof` on templated type.
 - Fixed regression: [#7508](https://github.com/microsoft/DirectXShaderCompiler/issues/7508) crash when calling `Load` with `status`.
 - Header file `dxcpix.h` was added to the release package.

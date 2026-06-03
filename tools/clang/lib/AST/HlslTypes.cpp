@@ -136,7 +136,8 @@ bool IsHLSLBuiltinRayAttributeStruct(clang::QualType QT) {
   if (const RecordType *RT = dyn_cast<RecordType>(Ty)) {
     const RecordDecl *RD = RT->getDecl();
     if (RD->getName() == "BuiltInTriangleIntersectionAttributes" ||
-        RD->getName() == "RayDesc")
+        RD->getName() == "RayDesc" ||
+        RD->getName() == "BuiltInTrianglePositions")
       return true;
   }
   return false;
@@ -543,18 +544,16 @@ bool IsHLSLNodeInputType(clang::QualType type) {
 }
 
 bool IsHLSLDynamicResourceType(clang::QualType type) {
-  if (const RecordType *RT = type->getAs<RecordType>()) {
-    StringRef name = RT->getDecl()->getName();
-    return name == ".Resource";
-  }
+  if (const HLSLDynamicResourceAttr *Attr =
+          getAttr<HLSLDynamicResourceAttr>(type))
+    return !Attr->getIsSampler();
   return false;
 }
 
 bool IsHLSLDynamicSamplerType(clang::QualType type) {
-  if (const RecordType *RT = type->getAs<RecordType>()) {
-    StringRef name = RT->getDecl()->getName();
-    return name == ".Sampler";
-  }
+  if (const HLSLDynamicResourceAttr *Attr =
+          getAttr<HLSLDynamicResourceAttr>(type))
+    return Attr->getIsSampler();
   return false;
 }
 
