@@ -233,6 +233,7 @@ def Borland : LangOpt<"Borland">;
 def CUDA : LangOpt<"CUDA">;
 def COnly : LangOpt<"CPlusPlus", 1>;
 def SPIRV : LangOpt<"SPIRV">; // SPIRV Change
+def HLSL : LangOpt<"HLSL">;   // HLSL Change
 
 // Defines targets for target-specific attributes. The list of strings should
 // specify architectures for which the target applies, based off the ArchType
@@ -1195,6 +1196,17 @@ def HLSLHitObject : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+// HLSL Dynamic Resource Attribute
+// Marks the builtin `.Resource` / `.Sampler` placeholder record types used
+// for descriptor heap indexing (ResourceDescriptorHeap[i] /
+// SamplerDescriptorHeap[i]).
+def HLSLDynamicResource : InheritableAttr {
+  let Spellings = []; // No spellings!
+  let Args = [BoolArgument<"IsSampler">];
+  let Subjects = SubjectList<[CXXRecord]>;
+  let Documentation = [Undocumented];
+}
+
 // HLSL Parameter Attributes
 
 def HLSLMaxRecords : InheritableAttr {
@@ -1228,6 +1240,13 @@ def HLSLUnboundedSparseNodes : InheritableParamAttr {
   let Documentation = [Undocumented];
 }
 
+def HLSLLinAlgMatrixAttributes : TypeAttr {
+  let Spellings = [CXX11<"", "__LinAlgMatrix_Attributes", 2015>];
+  let LangOpts = [HLSL];
+  let Args = [ExprArgument<"ComponentTy">, ExprArgument<"M">, ExprArgument<"N">,
+              ExprArgument<"Use">, ExprArgument<"Scope">];
+  let Documentation = [Undocumented];
+}
 // HLSL Change Ends
 
 // SPIRV Change Starts
@@ -2462,13 +2481,15 @@ def WarnUnused : InheritableAttr {
   let Documentation = [Undocumented];
 }
 
+// HLSL Change Begin - add C++11 spelling.
 def WarnUnusedResult : InheritableAttr {
-  let Spellings = [GCC<"warn_unused_result">,
+  let Spellings = [CXX11<"", "nodiscard", 2017>, GCC<"warn_unused_result">,
                    CXX11<"clang", "warn_unused_result">];
   let Subjects = SubjectList<[ObjCMethod, CXXRecord, FunctionLike], WarnDiag,
                              "ExpectedFunctionMethodOrClass">;
   let Documentation = [Undocumented];
 }
+// HLSL Change End - add C++11 spelling.
 
 def Weak : InheritableAttr {
   let Spellings = [GCC<"weak">];

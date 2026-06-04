@@ -429,6 +429,17 @@ def Wno_vk_emulated_features : Joined<["-"], "Wno-vk-emulated-features">, Group<
   HelpText<"Do not emit warnings for emulated features resulting from no direct mapping">;
 def fspv_print_all: Flag<["-"], "fspv-print-all">, Group<spirv_Group>, Flags<[CoreOption, DriverOption]>,
   HelpText<"Print the SPIR-V module before each pass and after the last one. Useful for debugging SPIR-V legalization and optimization passes.">;
+def fspv_use_emulated_heap
+    : Flag<["-"], "fspv-use-emulated-heap">,
+      Group<spirv_Group>,
+      Flags<[CoreOption, DriverOption]>,
+      HelpText<
+          "Use emulated descriptor heap using descriptor indexing (default).">;
+def fspv_use_descriptor_heap
+    : Flag<["-"], "fspv-use-descriptor-heap">,
+      Group<spirv_Group>,
+      Flags<[CoreOption, DriverOption]>,
+      HelpText<"Use SPV_EXT_descriptor_heap for HLSL descriptor heaps.">;
 def Oconfig : CommaJoined<["-"], "Oconfig=">, Group<spirv_Group>, Flags<[CoreOption]>,
   HelpText<"Specify a comma-separated list of SPIRV-Tools passes to customize optimization configuration (see http://khr.io/hlsl2spirv#optimization)">;
 def fspv_preserve_bindings : Flag<["-"], "fspv-preserve-bindings">, Group<spirv_Group>, Flags<[CoreOption, DriverOption]>,
@@ -514,6 +525,8 @@ def Lx : Flag<["-", "/"], "Lx">, HelpText<"Output hexadecimal literals">, Group<
 // In place of 'E' for clang; fxc uses 'E' for entry point.
 def P : Flag<["-", "/"], "P">, Flags<[CoreOption, DriverOption]>, Group<hlslutil_Group>,
   HelpText<"Preprocess to file">;
+def Po : Flag<["-", "/"], "Po">, Flags<[CoreOption, DriverOption]>, Group<hlslutil_Group>,
+  HelpText<"Preprocess to file (deprecated, use /P /Fi instead)">;
 
 // @<file> - options response file
 
